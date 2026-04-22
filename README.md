@@ -70,3 +70,12 @@ npm run deploy
 ```
 
 - Then hard-refresh the page (`Ctrl+Shift+R` / `Cmd+Shift+R`) to clear stale cached assets.
+
+
+## Recommended Pages setup (prevents white screens)
+
+Use **GitHub Actions** as the Pages source (Settings → Pages → Build and deployment → Source = `GitHub Actions`).
+
+Why: deploying a code branch directly serves raw `index.html` + `src/main.jsx` (unbuilt JSX), which can produce a blank white page even when there are no 404s.
+
+This repo includes `.github/workflows/deploy-pages.yml` to build with Vite and publish `dist/` automatically.
