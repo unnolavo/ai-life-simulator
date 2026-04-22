@@ -20,9 +20,8 @@ npm run preview
 
 ## Deploy to GitHub Pages
 
-1. Ensure your GitHub repo name matches the Vite base path in `vite.config.js` (currently `/ai-life-simulator/`).
-2. Install dependencies.
-3. Run:
+1. Install dependencies.
+2. Run:
 
 ```bash
 npm run deploy
@@ -56,3 +55,18 @@ Update these files to tweak behavior:
 ## Future AI hook
 
 `generateEventNarration(eventData)` in `src/simulation/engine.js` currently uses local templates, and is structured to swap in API narration later.
+
+
+## Troubleshooting GitHub Pages (blank/white screen)
+
+If Pages loads a white screen, the most common cause is broken JS/CSS asset paths.
+
+- This project now uses `base: './'` in `vite.config.js`, which is safe for repo-name changes and subpath hosting.
+- Rebuild and redeploy after pulling latest changes:
+
+```bash
+npm install
+npm run deploy
+```
+
+- Then hard-refresh the page (`Ctrl+Shift+R` / `Cmd+Shift+R`) to clear stale cached assets.
