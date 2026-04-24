@@ -35,6 +35,8 @@ This publishes `dist/` to the `gh-pages` branch using the `gh-pages` package.
 - **Reset Simulation**
 - **Simulation speed**: 1x / 2x / 3x
 - **Spawn New Agent**
+- **Scenario presets**: Balanced / Social / Volatile
+- **Seeded reset** for reproducible runs
 - Click any agent on the canvas to inspect details in the sidebar
 
 ## Tuning knobs
@@ -79,3 +81,8 @@ Use **GitHub Actions** as the Pages source (Settings → Pages → Build and dep
 Why: deploying a code branch directly serves raw `index.html` + `src/main.jsx` (unbuilt JSX), which can produce a blank white page even when there are no 404s.
 
 This repo includes `.github/workflows/deploy-pages.yml` to build with Vite and publish `dist/` automatically.
+
+
+## Debug Snapshot
+
+A lightweight debug panel shows scenario, seed, simulation time, interactions, average energy, and agent count to make tuning faster.

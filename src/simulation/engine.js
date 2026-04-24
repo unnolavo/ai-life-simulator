@@ -9,6 +9,7 @@ import {
   MAX_AGENTS,
   MAX_SPEED,
   NEIGHBOR_RADIUS,
+  SCENARIOS,
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from './constants';
@@ -16,46 +17,41 @@ import { createAgent, keepInBounds } from './agent';
 import { clamp, randomInRange, randomName } from '../utils/helpers';
 
 const EVENT_TEMPLATES = {
-  positive: [
-    '{a} greeted {b} warmly',
-    '{a} shared a clever idea with {b}',
-    '{a} encouraged {b}',
-  ],
-  negative: [
-    '{a} insulted {b}',
-    '{a} shoved past {b}',
-    '{a} mocked {b}',
-  ],
-  avoid: [
-    '{a} avoided {b}',
-    '{a} kept distance from {b}',
-    '{a} ignored {b}',
-  ],
-  curious: [
-    '{a} asked {b} a curious question',
-    '{a} followed {b} to investigate',
-    '{a} studied {b} closely',
-  ],
+  positive: ['{a} greeted {b} warmly', '{a} shared a clever idea with {b}', '{a} encouraged {b}'],
+  negative: ['{a} insulted {b}', '{a} shoved past {b}', '{a} mocked {b}'],
+  avoid: ['{a} avoided {b}', '{a} kept distance from {b}', '{a} ignored {b}'],
+  curious: ['{a} asked {b} a curious question', '{a} followed {b} to investigate', '{a} studied {b} closely'],
 };
 
 const magnitude = (v) => Math.hypot(v.x, v.y);
-
 const normalize = (v) => {
   const mag = magnitude(v);
-  if (mag === 0) return { x: 0, y: 0 };
-  return { x: v.x / mag, y: v.y / mag };
+  return mag === 0 ? { x: 0, y: 0 } : { x: v.x / mag, y: v.y / mag };
 };
 
-const pickTemplate = (arr) => arr[Math.floor(Math.random() * arr.length)];
-
-export const generateEventNarration = (eventData) => {
-  const template = pickTemplate(EVENT_TEMPLATES[eventData.kind] || EVENT_TEMPLATES.curious);
-  return template
-    .replace('{a}', eventData.actor)
-    .replace('{b}', eventData.target);
+const mulberry32 = (seed) => {
+  let t = seed >>> 0;
+  return () => {
+    t += 0x6d2b79f5;
+    let r = Math.imul(t ^ (t >>> 15), t | 1);
+    r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
 };
 
-export const createSimulationEngine = ({ onEvent } = {}) => {
+const toNumericSeed = (seedLike) => {
+  const raw = Number(seedLike);
+  if (Number.isFinite(raw)) return Math.abs(Math.floor(raw)) || 1;
+  return Date.now() % 2147483647;
+};
+
+export const generateEventNarration = (eventData, rng = Math.random) => {
+  const list = EVENT_TEMPLATES[eventData.kind] || EVENT_TEMPLATES.curious;
+  const template = list[Math.floor(rng() * list.length)];
+  return template.replace('{a}', eventData.actor).replace('{b}', eventData.target);
+};
+
+export const createSimulationEngine = ({ onEvent, seed = Date.now(), scenario = 'balanced' } = {}) => {
   const state = {
     agents: [],
     time: 0,
@@ -64,51 +60,81 @@ export const createSimulationEngine = ({ onEvent } = {}) => {
     paused: false,
     selectedAgentId: null,
     eventLog: [],
+    interactionsCount: 0,
+    seed: toNumericSeed(seed),
+    scenario,
+    rng: Math.random,
   };
 
+  const rand = () => state.rng();
+  const randRange = (min, max) => randomInRange(min, max, rand);
+
   const pushEvent = (event) => {
-    const fullEvent = { id: `${Date.now()}-${Math.random()}`, timestamp: Date.now(), ...event };
+    const fullEvent = { id: `${Date.now()}-${rand()}`, timestamp: Date.now(), ...event };
     state.eventLog.unshift(fullEvent);
     state.eventLog = state.eventLog.slice(0, 120);
+    state.interactionsCount += 1;
     onEvent?.(fullEvent);
   };
 
   const addAgent = (spawnNearCenter = false) => {
     if (state.agents.length >= MAX_AGENTS) return null;
     const usedNames = new Set(state.agents.map((a) => a.name));
-    const x = spawnNearCenter ? randomInRange(WORLD_WIDTH * 0.35, WORLD_WIDTH * 0.65) : randomInRange(30, WORLD_WIDTH - 30);
-    const y = spawnNearCenter ? randomInRange(WORLD_HEIGHT * 0.35, WORLD_HEIGHT * 0.65) : randomInRange(30, WORLD_HEIGHT - 30);
-    const agent = createAgent({ id: state.nextAgentId++, name: randomName(usedNames), x, y });
+    const x = spawnNearCenter ? randRange(WORLD_WIDTH * 0.35, WORLD_WIDTH * 0.65) : randRange(30, WORLD_WIDTH - 30);
+    const y = spawnNearCenter ? randRange(WORLD_HEIGHT * 0.35, WORLD_HEIGHT * 0.65) : randRange(30, WORLD_HEIGHT - 30);
+    const agent = createAgent({ id: state.nextAgentId++, name: randomName(usedNames, rand), x, y, rng: rand });
     state.agents.push(agent);
+
     state.agents.forEach((other) => {
       if (other.id !== agent.id) {
-        const relationA = randomInRange(-25, 25);
-        const relationB = randomInRange(-25, 25);
-        other.relationships[agent.id] = relationA;
-        agent.relationships[other.id] = relationB;
+        other.relationships[agent.id] = randRange(-25, 25);
+        agent.relationships[other.id] = randRange(-25, 25);
       }
     });
     return agent;
   };
 
+  const applyScenario = () => {
+    const preset = SCENARIOS[state.scenario] || SCENARIOS.balanced;
+    state.agents.forEach((agent) => {
+      agent.mood = clamp(agent.mood + preset.moodBias, -1, 1);
+    });
+
+    const ids = state.agents.map((a) => a.id);
+    for (let i = 0; i < preset.hostilePairs; i += 1) {
+      const a = state.agents[Math.floor(rand() * ids.length)];
+      const b = state.agents[Math.floor(rand() * ids.length)];
+      if (!a || !b || a.id === b.id) continue;
+      a.relationships[b.id] = -randRange(55, 90);
+      b.relationships[a.id] = -randRange(55, 90);
+    }
+
+    for (let i = 0; i < preset.alliedPairs; i += 1) {
+      const a = state.agents[Math.floor(rand() * ids.length)];
+      const b = state.agents[Math.floor(rand() * ids.length)];
+      if (!a || !b || a.id === b.id) continue;
+      a.relationships[b.id] = randRange(55, 90);
+      b.relationships[a.id] = randRange(55, 90);
+    }
+  };
+
   const reset = () => {
+    state.rng = mulberry32(state.seed);
     state.agents = [];
     state.time = 0;
     state.nextAgentId = 1;
     state.eventLog = [];
-    for (let i = 0; i < INITIAL_AGENT_COUNT; i += 1) {
-      addAgent(i < 5);
-    }
-    if (state.agents.length >= 2) {
-      state.agents[0].relationships[state.agents[1].id] = -70;
-      state.agents[1].relationships[state.agents[0].id] = -65;
-      state.agents[2].relationships[state.agents[3].id] = 80;
-      state.agents[3].relationships[state.agents[2].id] = 75;
-    }
+    state.interactionsCount = 0;
+
+    for (let i = 0; i < INITIAL_AGENT_COUNT; i += 1) addAgent(i < 5);
+    applyScenario();
   };
 
-  const updateBehaviors = (agent, dt) => {
+  const updateBehavior = (agent, dt) => {
     agent.behaviorTimer -= dt;
+    agent.behaviorCommitment = Math.max(0, agent.behaviorCommitment - dt);
+    agent.socialMomentum = clamp(agent.socialMomentum * (1 - dt * 0.4), -1, 1);
+
     const enemies = Object.entries(agent.relationships)
       .filter(([, score]) => score < -50)
       .map(([id]) => Number(id));
@@ -117,14 +143,19 @@ export const createSimulationEngine = ({ onEvent } = {}) => {
       agent.behavior = 'rest';
       return;
     }
-    if (enemies.length > 0 && Math.random() < 0.7) {
+    if (agent.behaviorCommitment > 0) return;
+
+    if (enemies.length > 0 && rand() < 0.65 + Math.max(0, -agent.mood) * 0.2) {
       agent.behavior = 'avoid enemy';
+      agent.behaviorCommitment = randRange(0.7, 1.6);
       return;
     }
+
     if (agent.behaviorTimer <= 0) {
-      agent.behaviorTimer = randomInRange(1.6, 4.5);
-      const desire = agent.sociability * 0.45 + agent.curiosity * 0.35 + ((agent.mood + 1) / 2) * 0.2;
-      agent.behavior = Math.random() < desire ? 'seek interaction' : 'wander';
+      agent.behaviorTimer = randRange(1.6, 4.5);
+      const desire = agent.sociability * 0.4 + agent.curiosity * 0.3 + ((agent.mood + 1) / 2) * 0.2 + Math.max(0, agent.socialMomentum) * 0.1;
+      agent.behavior = rand() < desire ? 'seek interaction' : 'wander';
+      agent.behaviorCommitment = randRange(0.6, 1.6);
     }
   };
 
@@ -153,24 +184,20 @@ export const createSimulationEngine = ({ onEvent } = {}) => {
   };
 
   const updateAgentDrives = (agent, dt) => {
+    const prevMood = agent.mood;
     if (agent.behavior === 'rest') {
       agent.energy = clamp(agent.energy + ENERGY_RECOVERY_RATE * dt, 0, 100);
       agent.mood = clamp(agent.mood + dt * 0.08, -1, 1);
-      if (Math.random() < 0.03) {
-        steerToward(agent, randomInRange(0, WORLD_WIDTH), randomInRange(0, WORLD_HEIGHT), 8, dt);
-      }
+      if (rand() < 0.03) steerToward(agent, randRange(0, WORLD_WIDTH), randRange(0, WORLD_HEIGHT), 8, dt);
     } else {
       agent.energy = clamp(agent.energy - ENERGY_DRAIN_RATE * (1 + magnitude(agent.velocity) / MAX_SPEED) * dt, 0, 100);
-      if (Math.random() < 0.18) {
-        const jitter = {
-          x: randomInRange(-1, 1),
-          y: randomInRange(-1, 1),
-        };
-        const unit = normalize(jitter);
-        agent.velocity.x += unit.x * 19;
-        agent.velocity.y += unit.y * 19;
+      if (rand() < 0.18) {
+        const jitter = normalize({ x: randRange(-1, 1), y: randRange(-1, 1) });
+        agent.velocity.x += jitter.x * 19;
+        agent.velocity.y += jitter.y * 19;
       }
     }
+    agent.recentMoodDelta = clamp(agent.recentMoodDelta * 0.9 + (agent.mood - prevMood), -1, 1);
   };
 
   const processNeighbors = (agent, dt) => {
@@ -210,7 +237,7 @@ export const createSimulationEngine = ({ onEvent } = {}) => {
     }
 
     if (agent.behavior === 'seek interaction' && nearest && nearestDistance < NEIGHBOR_RADIUS) {
-      steerToward(agent, nearest.x, nearest.y, 32 + agent.sociability * 20, dt);
+      steerToward(agent, nearest.x, nearest.y, 28 + agent.sociability * 24 + Math.max(0, agent.socialMomentum) * 8, dt);
     }
   };
 
@@ -225,31 +252,33 @@ export const createSimulationEngine = ({ onEvent } = {}) => {
     let delta = 0;
     let kind = 'curious';
     if (relationAB < -35 || hostility > vibe + 0.3) {
-      kind = Math.random() < 0.5 ? 'negative' : 'avoid';
-      delta = -randomInRange(6, 14);
+      kind = rand() < 0.5 ? 'negative' : 'avoid';
+      delta = -randRange(6, 14);
       agentA.mood = clamp(agentA.mood - 0.07, -1, 1);
       agentB.mood = clamp(agentB.mood - 0.09, -1, 1);
+      agentA.socialMomentum = clamp(agentA.socialMomentum - 0.16, -1, 1);
+      agentB.socialMomentum = clamp(agentB.socialMomentum - 0.11, -1, 1);
     } else if (relationAB > 35 || vibe > hostility + 0.2) {
       kind = 'positive';
-      delta = randomInRange(5, 12);
+      delta = randRange(5, 12);
       agentA.mood = clamp(agentA.mood + 0.08, -1, 1);
       agentB.mood = clamp(agentB.mood + 0.05, -1, 1);
+      agentA.socialMomentum = clamp(agentA.socialMomentum + 0.18, -1, 1);
+      agentB.socialMomentum = clamp(agentB.socialMomentum + 0.12, -1, 1);
     } else {
-      delta = randomInRange(-4, 6);
+      delta = randRange(-4, 6);
       agentA.mood = clamp(agentA.mood + delta * 0.003, -1, 1);
     }
 
     agentA.relationships[agentB.id] = clamp(relationAB + delta, -100, 100);
     agentB.relationships[agentA.id] = clamp(relationBA + delta * 0.8, -100, 100);
 
-    agentA.interactionCooldown = EVENT_COOLDOWN + randomInRange(0.2, 1.1);
-    agentB.interactionCooldown = EVENT_COOLDOWN + randomInRange(0.2, 1.1);
+    agentA.lastInteractionAt = state.time;
+    agentB.lastInteractionAt = state.time;
+    agentA.interactionCooldown = EVENT_COOLDOWN + randRange(0.2, 1.1);
+    agentB.interactionCooldown = EVENT_COOLDOWN + randRange(0.2, 1.1);
 
-    pushEvent({
-      kind,
-      text: generateEventNarration({ kind, actor: agentA.name, target: agentB.name }),
-      agents: [agentA.id, agentB.id],
-    });
+    pushEvent({ kind, text: generateEventNarration({ kind, actor: agentA.name, target: agentB.name }, rand), agents: [agentA.id, agentB.id] });
   };
 
   const update = (dtInput) => {
@@ -259,7 +288,7 @@ export const createSimulationEngine = ({ onEvent } = {}) => {
 
     for (const agent of state.agents) {
       agent.interactionCooldown = Math.max(0, agent.interactionCooldown - dt);
-      updateBehaviors(agent, dt);
+      updateBehavior(agent, dt);
       processNeighbors(agent, dt);
       updateAgentDrives(agent, dt);
       applyMovement(agent, dt);
@@ -272,7 +301,7 @@ export const createSimulationEngine = ({ onEvent } = {}) => {
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         if (dx * dx + dy * dy <= INTERACTION_RADIUS * INTERACTION_RADIUS) {
-          const actor = Math.random() < 0.5 ? a : b;
+          const actor = rand() < 0.5 ? a : b;
           const target = actor.id === a.id ? b : a;
           processInteraction(actor, target);
         }
@@ -285,7 +314,7 @@ export const createSimulationEngine = ({ onEvent } = {}) => {
     ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
     for (const agent of state.agents) {
-      const glow = 7 + ((agent.mood + 1) / 2) * 8;
+      const glow = 7 + ((agent.mood + 1) / 2) * 8 + Math.max(0, agent.socialMomentum) * 4;
       ctx.beginPath();
       ctx.fillStyle = agent.color;
       ctx.shadowColor = agent.color;
@@ -302,11 +331,23 @@ export const createSimulationEngine = ({ onEvent } = {}) => {
         ctx.stroke();
       }
     }
-
     ctx.shadowBlur = 0;
   };
 
   const pickAgentAt = (x, y) => state.agents.find((agent) => (agent.x - x) ** 2 + (agent.y - y) ** 2 <= (AGENT_RADIUS + 4) ** 2) || null;
+
+  const getDebugSnapshot = () => {
+    const totalEnergy = state.agents.reduce((sum, a) => sum + a.energy, 0);
+    const avgEnergy = state.agents.length ? totalEnergy / state.agents.length : 0;
+    return {
+      seed: state.seed,
+      scenario: state.scenario,
+      simTime: state.time,
+      agentCount: state.agents.length,
+      interactions: state.interactionsCount,
+      avgEnergy,
+    };
+  };
 
   reset();
 
@@ -317,14 +358,11 @@ export const createSimulationEngine = ({ onEvent } = {}) => {
     reset,
     addAgent,
     pickAgentAt,
-    setPaused: (paused) => {
-      state.paused = paused;
-    },
-    setSpeed: (speed) => {
-      state.speed = speed;
-    },
-    setSelectedAgent: (id) => {
-      state.selectedAgentId = id;
-    },
+    getDebugSnapshot,
+    setPaused: (paused) => { state.paused = paused; },
+    setSpeed: (speed) => { state.speed = speed; },
+    setSelectedAgent: (id) => { state.selectedAgentId = id; },
+    setSeed: (seedValue) => { state.seed = toNumericSeed(seedValue); },
+    setScenario: (nextScenario) => { state.scenario = SCENARIOS[nextScenario] ? nextScenario : 'balanced'; },
   };
 };

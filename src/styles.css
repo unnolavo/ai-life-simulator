@@ -44,7 +44,7 @@ h3 { margin-top: 0; }
   flex-wrap: wrap;
 }
 
-button, select {
+button, select, input {
   border: 1px solid rgba(180, 204, 255, 0.35);
   background: rgba(20, 31, 57, 0.88);
   color: #e8f0ff;
@@ -53,7 +53,7 @@ button, select {
   font: inherit;
 }
 
-button:hover, select:hover { border-color: rgba(227, 236, 255, 0.7); }
+button:hover, select:hover, input:hover { border-color: rgba(227, 236, 255, 0.7); }
 
 .main-grid {
   display: grid;
@@ -124,3 +124,25 @@ canvas {
 @media (max-width: 1000px) {
   .main-grid { grid-template-columns: 1fr; }
 }
+
+
+.seed-input {
+  width: 110px;
+}
+
+.debug-panel { padding: 1rem; }
+.debug-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.5rem;
+}
+.debug-grid p {
+  margin: 0;
+  padding: 0.5rem;
+  background: rgba(15, 29, 58, 0.5);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.debug-grid span { color: #97acd7; font-size: 0.8rem; }

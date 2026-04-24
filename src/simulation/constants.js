@@ -12,6 +12,12 @@ export const ENERGY_RECOVERY_RATE = 13;
 export const UI_UPDATE_INTERVAL = 140;
 export const EVENT_COOLDOWN = 1.8;
 
+export const SCENARIOS = {
+  balanced: { label: 'Balanced', hostilePairs: 1, alliedPairs: 1, moodBias: 0 },
+  social: { label: 'Social', hostilePairs: 0, alliedPairs: 3, moodBias: 0.2 },
+  volatile: { label: 'Volatile', hostilePairs: 4, alliedPairs: 0, moodBias: -0.2 },
+};
+
 export const NAMES = [
   'Nova', 'Ash', 'Milo', 'Zara', 'Luna', 'Kai', 'Iris', 'Orion', 'Sage', 'Remy',
   'Juno', 'Skye', 'Atlas', 'Vera', 'Nico', 'Ember', 'Rin', 'Theo', 'Lyra', 'Ezra',

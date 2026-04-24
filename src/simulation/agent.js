@@ -6,25 +6,29 @@ import {
 } from './constants';
 import { randomColor, randomInRange } from '../utils/helpers';
 
-export const createAgent = ({ id, name, x, y }) => ({
+export const createAgent = ({ id, name, x, y, rng = Math.random }) => ({
   id,
   name,
-  color: randomColor(),
+  color: randomColor(rng),
   x,
   y,
   velocity: {
-    x: randomInRange(-MAX_SPEED, MAX_SPEED),
-    y: randomInRange(-MAX_SPEED, MAX_SPEED),
+    x: randomInRange(-MAX_SPEED, MAX_SPEED, rng),
+    y: randomInRange(-MAX_SPEED, MAX_SPEED, rng),
   },
-  energy: randomInRange(55, 100),
-  mood: randomInRange(-0.2, 0.5),
-  aggression: randomInRange(0, 1),
-  sociability: randomInRange(0, 1),
-  curiosity: randomInRange(0, 1),
+  energy: randomInRange(55, 100, rng),
+  mood: randomInRange(-0.2, 0.5, rng),
+  aggression: randomInRange(0, 1, rng),
+  sociability: randomInRange(0, 1, rng),
+  curiosity: randomInRange(0, 1, rng),
   relationships: {},
   behavior: 'wander',
-  behaviorTimer: randomInRange(2, 5),
-  interactionCooldown: randomInRange(0.1, 1.4),
+  behaviorTimer: randomInRange(2, 5, rng),
+  behaviorCommitment: randomInRange(0.7, 2.2, rng),
+  interactionCooldown: randomInRange(0.1, 1.4, rng),
+  socialMomentum: 0,
+  recentMoodDelta: 0,
+  lastInteractionAt: 0,
 });
 
 export const keepInBounds = (agent) => {
