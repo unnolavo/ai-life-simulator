@@ -22,6 +22,35 @@ function RelationshipList({ title, data, agentsById, trends }) {
   );
 }
 
+function RecentInteractionList({ selectedAgent, agentsById }) {
+  const entries = Object.entries(selectedAgent.recentInteractions || {})
+    .map(([id, value]) => ({
+      id,
+      memory: value?.memory ?? 0,
+      streak: value?.streak ?? 0,
+      streakKind: value?.streakKind ?? 'neutral',
+    }))
+    .sort((a, b) => Math.abs(b.memory) - Math.abs(a.memory))
+    .slice(0, 5);
+
+  return (
+    <div>
+      <h4>Recent Dynamics</h4>
+      <ul className="relation-list">
+        {entries.length === 0 ? <li className="muted">No strong dynamics yet</li> : entries.map((entry) => (
+          <li key={`memory-${entry.id}`}>
+            <span>
+              {agentsById[entry.id]?.name ?? `Agent ${entry.id}`}
+              <em className="trend">{entry.streakKind === 'positive' ? '★' : entry.streakKind === 'negative' ? '⚠' : '•'}</em>
+            </span>
+            <strong>{entry.memory.toFixed(2)} ({entry.streak})</strong>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export default function Sidebar({ selectedAgent, agentsById }) {
   if (!selectedAgent) {
     return (
@@ -48,6 +77,7 @@ export default function Sidebar({ selectedAgent, agentsById }) {
       </div>
       <RelationshipList title="Top Friends" data={friends} agentsById={agentsById} trends={selectedAgent.relationshipTrends} />
       <RelationshipList title="Top Enemies" data={enemies} agentsById={agentsById} trends={selectedAgent.relationshipTrends} />
+      <RecentInteractionList selectedAgent={selectedAgent} agentsById={agentsById} />
     </aside>
   );
 }

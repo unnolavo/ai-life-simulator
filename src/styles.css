@@ -99,6 +99,11 @@ canvas {
   padding: 0.4rem 0.5rem;
   border-radius: 8px;
   background: rgba(15, 29, 58, 0.5);
+  gap: 0.45rem;
+}
+
+.relation-list strong {
+  font-size: 0.82rem;
 }
 
 .event-log-panel { padding: 1rem; }

@@ -45,6 +45,7 @@ This publishes `dist/` to the `gh-pages` branch using the `gh-pages` package.
 - **Seeded reset** for reproducible runs
 - **Selected events only** toggle to focus on one agent
 - Click any agent on the canvas to inspect details in the sidebar
+- Sidebar includes a **Recent Dynamics** list (interaction-memory intensity + streak hints)
 
 ## Tuning knobs
 
