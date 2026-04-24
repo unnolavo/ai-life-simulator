@@ -18,6 +18,12 @@ npm run build
 npm run preview
 ```
 
+## Test
+
+```bash
+npm run test
+```
+
 ## Deploy to GitHub Pages
 
 1. Install dependencies.
@@ -82,7 +88,7 @@ Use **GitHub Actions** as the Pages source (Settings → Pages → Build and dep
 
 Why: deploying a code branch directly serves raw `index.html` + `src/main.jsx` (unbuilt JSX), which can produce a blank white page even when there are no 404s.
 
-This repo includes `.github/workflows/deploy-pages.yml` to build with Vite and publish `dist/` automatically.
+This repo includes `.github/workflows/deploy-pages.yml` to run unit tests, build with Vite, and publish `dist/` automatically.
 
 
 ## Debug Snapshot
