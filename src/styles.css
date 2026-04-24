@@ -146,3 +146,25 @@ canvas {
   gap: 0.2rem;
 }
 .debug-grid span { color: #97acd7; font-size: 0.8rem; }
+
+
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.88rem;
+  color: #d8e5ff;
+}
+
+.checkbox-label input {
+  width: auto;
+  margin: 0;
+}
+
+.trend {
+  color: #89a8ff;
+  font-style: normal;
+  margin-left: 0.15rem;
+}
+
+.event-arc { border-left: 3px solid #f0c96a; }

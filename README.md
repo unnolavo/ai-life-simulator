@@ -37,6 +37,7 @@ This publishes `dist/` to the `gh-pages` branch using the `gh-pages` package.
 - **Spawn New Agent**
 - **Scenario presets**: Balanced / Social / Volatile
 - **Seeded reset** for reproducible runs
+- **Selected events only** toggle to focus on one agent
 - Click any agent on the canvas to inspect details in the sidebar
 
 ## Tuning knobs
@@ -47,6 +48,7 @@ Update these files to tweak behavior:
 - **Behavior traits / motion tuning**: values in `src/simulation/engine.js` and defaults in `src/simulation/agent.js`
 - **World size**: `WORLD_WIDTH` and `WORLD_HEIGHT` in `src/simulation/constants.js`
 - **Interaction radius**: `INTERACTION_RADIUS` in `src/simulation/constants.js`
+- **Memory/arc sensitivity**: `ARC_STREAK_THRESHOLD` and `MEMORY_DECAY_PER_SECOND` in `src/simulation/constants.js`
 
 ## Architecture
 
@@ -86,3 +88,8 @@ This repo includes `.github/workflows/deploy-pages.yml` to build with Vite and p
 ## Debug Snapshot
 
 A lightweight debug panel shows scenario, seed, simulation time, interactions, average energy, and agent count to make tuning faster.
+
+
+## Event arcs and memory
+
+Agents now maintain short-term interaction memory, and repeated positive/negative streaks can emit higher-level arc events (friendship, rivalry, reconciliation).

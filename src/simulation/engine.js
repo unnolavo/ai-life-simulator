@@ -1,5 +1,6 @@
 import {
   AGENT_RADIUS,
+  ARC_STREAK_THRESHOLD,
   AVOIDANCE_RADIUS,
   ENERGY_DRAIN_RATE,
   ENERGY_RECOVERY_RATE,
@@ -8,6 +9,7 @@ import {
   INTERACTION_RADIUS,
   MAX_AGENTS,
   MAX_SPEED,
+  MEMORY_DECAY_PER_SECOND,
   NEIGHBOR_RADIUS,
   SCENARIOS,
   WORLD_HEIGHT,
@@ -21,6 +23,9 @@ const EVENT_TEMPLATES = {
   negative: ['{a} insulted {b}', '{a} shoved past {b}', '{a} mocked {b}'],
   avoid: ['{a} avoided {b}', '{a} kept distance from {b}', '{a} ignored {b}'],
   curious: ['{a} asked {b} a curious question', '{a} followed {b} to investigate', '{a} studied {b} closely'],
+  arc_friendship: ['{a} and {b} seem to be building a friendship', '{a} and {b} keep backing each other up'],
+  arc_rivalry: ['{a} and {b} have become rivals', '{a} and {b} are locked in a feud'],
+  arc_reconcile: ['{a} and {b} finally reconciled', '{a} and {b} cooled off after repeated clashes'],
 };
 
 const magnitude = (v) => Math.hypot(v.x, v.y);
@@ -45,8 +50,15 @@ const toNumericSeed = (seedLike) => {
   return Date.now() % 2147483647;
 };
 
+const sentimentForKind = (kind) => {
+  if (kind === 'positive') return 'positive';
+  if (kind === 'negative' || kind === 'avoid') return 'negative';
+  return 'neutral';
+};
+
 export const generateEventNarration = (eventData, rng = Math.random) => {
-  const list = EVENT_TEMPLATES[eventData.kind] || EVENT_TEMPLATES.curious;
+  const key = eventData.arcType ? `arc_${eventData.arcType}` : eventData.kind;
+  const list = EVENT_TEMPLATES[key] || EVENT_TEMPLATES.curious;
   const template = list[Math.floor(rng() * list.length)];
   return template.replace('{a}', eventData.actor).replace('{b}', eventData.target);
 };
@@ -88,7 +100,11 @@ export const createSimulationEngine = ({ onEvent, seed = Date.now(), scenario = 
     state.agents.forEach((other) => {
       if (other.id !== agent.id) {
         other.relationships[agent.id] = randRange(-25, 25);
+        other.relationshipTrends[agent.id] = 0;
+        other.recentInteractions[agent.id] = { memory: 0, streakKind: 'neutral', streak: 0, lastArcAt: -999 };
         agent.relationships[other.id] = randRange(-25, 25);
+        agent.relationshipTrends[other.id] = 0;
+        agent.recentInteractions[other.id] = { memory: 0, streakKind: 'neutral', streak: 0, lastArcAt: -999 };
       }
     });
     return agent;
@@ -135,6 +151,12 @@ export const createSimulationEngine = ({ onEvent, seed = Date.now(), scenario = 
     agent.behaviorCommitment = Math.max(0, agent.behaviorCommitment - dt);
     agent.socialMomentum = clamp(agent.socialMomentum * (1 - dt * 0.4), -1, 1);
 
+    let memorySignal = 0;
+    Object.values(agent.recentInteractions).forEach((entry) => {
+      entry.memory *= Math.max(0, 1 - dt * MEMORY_DECAY_PER_SECOND);
+      memorySignal += entry.memory;
+    });
+
     const enemies = Object.entries(agent.relationships)
       .filter(([, score]) => score < -50)
       .map(([id]) => Number(id));
@@ -145,7 +167,7 @@ export const createSimulationEngine = ({ onEvent, seed = Date.now(), scenario = 
     }
     if (agent.behaviorCommitment > 0) return;
 
-    if (enemies.length > 0 && rand() < 0.65 + Math.max(0, -agent.mood) * 0.2) {
+    if (enemies.length > 0 && rand() < 0.65 + Math.max(0, -agent.mood) * 0.2 + Math.max(0, -memorySignal) * 0.1) {
       agent.behavior = 'avoid enemy';
       agent.behaviorCommitment = randRange(0.7, 1.6);
       return;
@@ -153,7 +175,7 @@ export const createSimulationEngine = ({ onEvent, seed = Date.now(), scenario = 
 
     if (agent.behaviorTimer <= 0) {
       agent.behaviorTimer = randRange(1.6, 4.5);
-      const desire = agent.sociability * 0.4 + agent.curiosity * 0.3 + ((agent.mood + 1) / 2) * 0.2 + Math.max(0, agent.socialMomentum) * 0.1;
+      const desire = agent.sociability * 0.4 + agent.curiosity * 0.3 + ((agent.mood + 1) / 2) * 0.2 + Math.max(0, agent.socialMomentum) * 0.1 + Math.max(0, memorySignal) * 0.08;
       agent.behavior = rand() < desire ? 'seek interaction' : 'wander';
       agent.behaviorCommitment = randRange(0.6, 1.6);
     }
@@ -241,6 +263,43 @@ export const createSimulationEngine = ({ onEvent, seed = Date.now(), scenario = 
     }
   };
 
+  const pushArcIfNeeded = (agentA, agentB, entry, sentiment) => {
+    if (entry.streak < ARC_STREAK_THRESHOLD) return;
+    if (state.time - entry.lastArcAt < 8) return;
+
+    let arcType = null;
+    if (sentiment === 'positive') arcType = 'friendship';
+    if (sentiment === 'negative') arcType = 'rivalry';
+    if (sentiment === 'positive' && entry.lastNegativeStreak >= ARC_STREAK_THRESHOLD) arcType = 'reconcile';
+
+    if (!arcType) return;
+    entry.lastArcAt = state.time;
+    pushEvent({
+      kind: 'arc',
+      arcType,
+      text: generateEventNarration({ kind: 'arc', arcType, actor: agentA.name, target: agentB.name }, rand),
+      agents: [agentA.id, agentB.id],
+    });
+  };
+
+  const updateInteractionMemory = (observer, other, delta, kind, relationDelta) => {
+    const memory = observer.recentInteractions[other.id] || { memory: 0, streakKind: 'neutral', streak: 0, lastArcAt: -999, lastNegativeStreak: 0 };
+    const sentiment = sentimentForKind(kind);
+
+    memory.memory = clamp(memory.memory * 0.8 + delta / 16, -2, 2);
+    if (sentiment === memory.streakKind) {
+      memory.streak += 1;
+    } else if (sentiment !== 'neutral') {
+      if (memory.streakKind === 'negative') memory.lastNegativeStreak = memory.streak;
+      memory.streakKind = sentiment;
+      memory.streak = 1;
+    }
+
+    observer.recentInteractions[other.id] = memory;
+    observer.relationshipTrends[other.id] = relationDelta;
+    pushArcIfNeeded(observer, other, memory, sentiment);
+  };
+
   const processInteraction = (agentA, agentB) => {
     if (agentA.interactionCooldown > 0 || agentB.interactionCooldown > 0) return;
 
@@ -270,8 +329,13 @@ export const createSimulationEngine = ({ onEvent, seed = Date.now(), scenario = 
       agentA.mood = clamp(agentA.mood + delta * 0.003, -1, 1);
     }
 
-    agentA.relationships[agentB.id] = clamp(relationAB + delta, -100, 100);
-    agentB.relationships[agentA.id] = clamp(relationBA + delta * 0.8, -100, 100);
+    const nextAB = clamp(relationAB + delta, -100, 100);
+    const nextBA = clamp(relationBA + delta * 0.8, -100, 100);
+    agentA.relationships[agentB.id] = nextAB;
+    agentB.relationships[agentA.id] = nextBA;
+
+    updateInteractionMemory(agentA, agentB, delta, kind, nextAB - relationAB);
+    updateInteractionMemory(agentB, agentA, delta * 0.8, kind, nextBA - relationBA);
 
     agentA.lastInteractionAt = state.time;
     agentB.lastInteractionAt = state.time;

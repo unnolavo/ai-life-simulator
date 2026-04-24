@@ -22,6 +22,8 @@ export const createAgent = ({ id, name, x, y, rng = Math.random }) => ({
   sociability: randomInRange(0, 1, rng),
   curiosity: randomInRange(0, 1, rng),
   relationships: {},
+  relationshipTrends: {},
+  recentInteractions: {},
   behavior: 'wander',
   behaviorTimer: randomInRange(2, 5, rng),
   behaviorCommitment: randomInRange(0.7, 2.2, rng),

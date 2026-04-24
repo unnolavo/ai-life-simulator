@@ -19,6 +19,7 @@ export default function App() {
   const [selectedAgentId, setSelectedAgentId] = useState(null);
   const [seedInput, setSeedInput] = useState(initialSeed);
   const [scenario, setScenario] = useState('balanced');
+  const [selectedOnlyEvents, setSelectedOnlyEvents] = useState(false);
   const [, forceTick] = useState(0);
 
   useEffect(() => {
@@ -41,6 +42,10 @@ export default function App() {
   const selectedAgent = engine.state.agents.find((agent) => agent.id === selectedAgentId) || null;
   const agentsById = Object.fromEntries(engine.state.agents.map((agent) => [agent.id, agent]));
   const debug = engine.getDebugSnapshot();
+
+  const visibleEvents = selectedOnlyEvents && selectedAgentId
+    ? events.filter((event) => event.agents?.includes(selectedAgentId))
+    : events;
 
   const resetSimulation = () => {
     engine.setSeed(Number(seedInput));
@@ -80,6 +85,14 @@ export default function App() {
             placeholder="Seed"
             className="seed-input"
           />
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={selectedOnlyEvents}
+              onChange={(e) => setSelectedOnlyEvents(e.target.checked)}
+            />
+            Selected events only
+          </label>
           <button type="button" onClick={spawnAgent}>Spawn New Agent</button>
         </div>
       </header>
@@ -101,7 +114,7 @@ export default function App() {
         </div>
       </section>
 
-      <EventLog events={events} />
+      <EventLog events={visibleEvents} />
     </main>
   );
 }

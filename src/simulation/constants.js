@@ -11,6 +11,8 @@ export const ENERGY_DRAIN_RATE = 2.4;
 export const ENERGY_RECOVERY_RATE = 13;
 export const UI_UPDATE_INTERVAL = 140;
 export const EVENT_COOLDOWN = 1.8;
+export const ARC_STREAK_THRESHOLD = 3;
+export const MEMORY_DECAY_PER_SECOND = 0.15;
 
 export const SCENARIOS = {
   balanced: { label: 'Balanced', hostilePairs: 1, alliedPairs: 1, moodBias: 0 },
